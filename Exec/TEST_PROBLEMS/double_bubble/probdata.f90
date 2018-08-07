@@ -8,9 +8,13 @@ module probdata_module
   private
 
   ! variables for the probdata namelist
-  double precision, save, public :: pert_temp_factor = 1.d0
-  double precision, save, public :: pert_rad_factor = 1.d0
-  logical         , save, public :: do_small_domain = .false.
+  double precision, save, public :: pres_base = 1.65d6
+  double precision, save, public :: dens_base = 1.65d-3
+  double precision, save, public :: pert_factor = 8.1d-3
+  double precision, save, public :: y_pert_center = 0.7d0
+  double precision, save, public :: pert_width = 0.025d0
+  logical, save, public :: single = .false.
+  logical, save, public :: do_isentropic = .true.
 
 end module probdata_module
 
@@ -19,7 +23,7 @@ subroutine probdata_init(name,namlen)
   use probdata_module
 
   implicit none
-  
+
   integer :: namlen
   integer :: name(namlen)
 
@@ -28,14 +32,22 @@ subroutine probdata_init(name,namlen)
   integer, parameter :: maxlen = 256
   character (len=maxlen) :: probin
 
-  namelist /probdata/ pert_temp_factor
-  namelist /probdata/ pert_rad_factor
-  namelist /probdata/ do_small_domain
+  namelist /probdata/ pres_base
+  namelist /probdata/ dens_base
+  namelist /probdata/ pert_factor
+  namelist /probdata/ y_pert_center
+  namelist /probdata/ pert_width
+  namelist /probdata/ single
+  namelist /probdata/ do_isentropic
 
   ! default values
-  pert_temp_factor = 1.d0
-  pert_rad_factor =  1.d0
-  do_small_domain = .false.
+  pres_base = 1.65d6
+  dens_base = 1.65d-3
+  pert_factor = 0.1d0
+  y_pert_center = 0.5d0
+  pert_width = 0.1d0
+  single = .false.
+  do_isentropic = .true.
 
   ! create the filename
   if (namlen > maxlen) then

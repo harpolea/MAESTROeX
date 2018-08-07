@@ -56,9 +56,8 @@ maestro.plot_int   = 100     # number of timesteps between plot files
 maestro.plot_deltat = 0.5e0
 
 # CHECKPOINT
-amr.checkpoint_files_output = 0
 maestro.check_base_name = chk
-maestro.chk_int         = 100
+maestro.chk_int         = -1
 
 # ALGORITHMIC OPTIONS
 maestro.evolve_base_state = true

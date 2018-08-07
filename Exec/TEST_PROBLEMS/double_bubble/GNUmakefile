@@ -18,11 +18,13 @@ MICROPHYSICS_HOME ?= ../../../../Microphysics
 # Set the EOS, conductivity, and network directories
 # We first check if these exist in $(MAESTROEX_HOME)/Microphysics/(EOS/conductivity/networks)
 # If not we use the version in $(MICROPHYSICS_HOME)/Microphysics/(EOS/conductivity/networks)
-EOS_DIR          := helmholtz
-CONDUCTIVITY_DIR := stellar
-NETWORK_DIR      := ignition_simple
+EOS_DIR          := multigamma
+CONDUCTIVITY_DIR := constant
+NETWORK_DIR      := general_null
+
+GENERAL_NET_INPUTS := $(MICROPHYSICS_HOME)/networks/$(NETWORK_DIR)/simple3.net
 
 Bpack   := ./Make.package
-Blocs   := . 
+Blocs   := .
 
 include $(MAESTROEX_HOME)/Exec/Make.Maestro
