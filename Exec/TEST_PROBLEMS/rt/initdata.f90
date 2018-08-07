@@ -105,7 +105,7 @@ contains
                 end if
 
                 scal(i,j,k,rho_comp) = dens_pert
-                scal(i,j,k,spec_comp:spec_comp+nspec-1) = rhoX_pert(1:)
+                scal(i,j,k,spec_comp:spec_comp+nspec-1) = rhoX_pert(1:nspec)
 
                 vel(i,j,k,1:nc_v) = vel_pert(1:nc_v)
 
@@ -139,24 +139,24 @@ contains
 
     dens_pert = rho_1 + ((rho_2-rho_1)/2.0d0)*(1.0d0+tanh((y-pertheight)/0.005d0))
 
-    rhoX_pert = dens_pert*s0_init(spec_comp:spec_comp+nspec-1)/s0_init(rho_comp)
+    rhoX_pert(:) = dens_pert*s0_init(spec_comp:spec_comp+nspec-1)/s0_init(rho_comp)
 
-    y0 = 0.5d0 * (prob_lo(2) + prob_hi(2))
-
-    pert = 0.0d0
-
-    if (nmodes == 1) then
-        pert = pert + vel_amplitude*0.5d0*(cos(2.d0*M_PI*x/L_x) + &
-        cos(2.d0*M_PI*(L_x- x)/L_x))
-    else
-        do n = 1, nmodes
-            pert = pert + vel_amplitude*alpha(n)* &
-                 cos(2.d0*M_PI*x/L_x + phi(n))
-        enddo
-    endif
+    ! y0 = 0.5d0 * (prob_lo(2) + prob_hi(2))
+    !
+    ! pert = 0.0d0
+    !
+    ! if (nmodes == 1) then
+    !     pert = pert + vel_amplitude*0.5d0*(cos(2.d0*M_PI*x/L_x) + &
+    !     cos(2.d0*M_PI*(L_x- x)/L_x))
+    ! else
+    !     do n = 1, nmodes
+    !         pert = pert + vel_amplitude*alpha(n)* &
+    !              cos(2.d0*M_PI*x/L_x + phi(n))
+    !     enddo
+    ! endif
 
     vel_pert(:) = 0.0d0
-    vel_pert(2) = exp(-(y-y0)**2/vel_width**2)*pert
+    !vel_pert(2) = exp(-(y-y0)**2/vel_width**2)*pert
 
   end subroutine perturb_2d
 
