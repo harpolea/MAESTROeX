@@ -12,6 +12,7 @@ module probdata_module
   double precision, save, public :: rho_2 = 2.d0
   double precision, save, public :: vel_amplitude = 1.d0
   double precision, save, public :: vel_width = 1.d0
+  double precision, save, public :: p0_base = 1.0d0
   integer, save, public :: nmodes = 1
 
 end module probdata_module
@@ -34,6 +35,7 @@ subroutine probdata_init(name,namlen)
   namelist /probdata/ rho_2
   namelist /probdata/ vel_amplitude
   namelist /probdata/ vel_width
+  namelist /probdata/ p0_base
   namelist /probdata/ nmodes
 
   ! default values
@@ -41,6 +43,7 @@ subroutine probdata_init(name,namlen)
   rho_2 =  2.d0
   vel_amplitude = 1.0d0
   vel_width = 1.0d0
+  p0_base = 1.0d0
   nmodes = 1
 
   ! create the filename

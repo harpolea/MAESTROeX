@@ -85,6 +85,8 @@ contains
             phi(n) = 2.0d0*M_PI*rand
         enddo
 
+        ! write(*,*) "alpha = ", alpha
+
        do k=lo(3),hi(3)
           z = prob_lo(3) + (dble(k)+0.5d0) * dx(3)
           do j = lo(2), hi(2)
@@ -105,7 +107,7 @@ contains
                 scal(i,j,k,rho_comp) = dens_pert
                 scal(i,j,k,spec_comp:spec_comp+nspec-1) = rhoX_pert(1:)
 
-                vel(i,j,k,1:nc_v) = vel_pert(1:)
+                vel(i,j,k,1:nc_v) = vel_pert(1:nc_v)
 
              end do
           end do

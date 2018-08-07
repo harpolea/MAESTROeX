@@ -1,6 +1,6 @@
 
 # INITIAL MODEL
-maestro.model_file = "model.hse.cool.coulomb"
+maestro.model_file = "model.hse"
 maestro.probin_file = "probin"
 maestro.perturb_model = true
 
@@ -9,19 +9,17 @@ maestro.ppm_type = 0
 maestro.max_step  = 1
 maestro.stop_time = 2.0
 
+# PROBLEM SIZE
+geometry.prob_lo     =  0.0  0.0  0.0
+geometry.prob_hi     =  0.5  1.0  1.0
+
 # PROBLEM SIZE & GEOMETRY
-
-
 # 0 = Interior   3 = Symmetry
 # 1 = Inflow     4 = Slipwall
 # 2 = Outflow    5 = NoSlipWall
-maestro.lo_bc = 2 2 2
-maestro.hi_bc = 2 2 2
-geometry.is_periodic =  0 0 0
-
-# PROBLEM SIZE
-geometry.prob_lo     =  0.0  0.0  0.0
-geometry.prob_hi     =  1.0  1.0  1.0
+maestro.lo_bc = 0 4 2
+maestro.hi_bc = 0 2 2
+geometry.is_periodic =  1 0 0
 
 # VERBOSITY
 maestro.v              = 1       # verbosity
@@ -30,7 +28,7 @@ maestro.v              = 1       # verbosity
 amrex.fpe_trap_invalid = 1       # floating point exception
 
 # REFINEMENT
-amr.n_cell           =  64   64   64
+amr.n_cell           =  64   128   64
 amr.max_level       = 0       # maximum level number allowed
 amr.ref_ratio       = 2 2 2 2 # refinement ratio
 amr.blocking_factor = 8       # block factor in grid generation
@@ -68,7 +66,7 @@ maestro.init_divu_iter        = 1
 maestro.init_iter             = 1
 maestro.do_reflux             = 1 # do we do the hyperbolic reflux
 
-maestro.do_sponge = 1
+maestro.do_sponge = 0
 maestro.sponge_center_density = 3.e6
 maestro.sponge_start_factor = 10.e0
 maestro.sponge_kappa = 10.e0
@@ -93,3 +91,12 @@ maestro.eps_hg             = 1.e-12
 maestro.eps_hg_max         = 1.e-10
 maestro.hg_level_factor    = 10.
 maestro.eps_hg_bottom      = 1.e-4
+
+# HYDRODYNAMICS options
+maestro.anelastic_cutoff = 1.e-10
+maestro.base_cutoff_density = 1.e-10
+maestro.grav_const = -1.0
+
+# EOS parameters
+maestro.small_temp = 1.e-10
+maestro.small_dens = 1.e-10
