@@ -18,145 +18,154 @@ Maestro::Init ()
 
     if (restart_file == "") {
 
-	start_step = 1;
+        start_step = 1;
 
-	// fill in multifab and base state data
-	InitData();
+        // fill in multifab and base state data
+        InitData();
 
-	if (plot_int > 0) {
-	    Print() << "\nWriting plotfile plt_InitData after InitData" << std::endl;
-	    WritePlotFile(9999999,t_old,rho0_old,p0_old,uold,sold);
-	}
+        if (plot_int > 0) {
+
+	    // Need to fill normal vector to compute velrc in plotfile
+	    if (spherical) { MakeNormal(); }
+
+            Print() << "\nWriting plotfile plt_InitData after InitData" << std::endl;
+            WritePlotFile(9999999,t_old,0,rho0_old,rhoh0_old,p0_old,gamma1bar_old,uold,sold,S_cc_old);
+        }
     }
     else {
-	Print() << "Initializing from checkpoint " << restart_file << std::endl;
+        Print() << "Initializing from checkpoint " << restart_file << std::endl;
 
-	// read in checkpoint file
-	// this builds (defines) and fills the following MultiFabs:
-	//
-	// snew, unew, gpi, dSdt, S_cc_new
-	//
-	// and also fills in the 1D arrays:
-	//
-	// rho0_new, p0_new, gamma1bar_new, rhoh0_new, beta0_new, psi, tempbar, etarho_cc, tempbar_init
-	ReadCheckPoint();
+        // read in checkpoint file
+        // this builds (defines) and fills the following MultiFabs:
+        //
+        // snew, unew, gpi, dSdt, S_cc_new
+        //
+        // and also fills in the 1D arrays:
+        //
+        // rho0_new, p0_new, gamma1bar_new, rhoh0_new, beta0_new, psi, tempbar, etarho_cc, tempbar_init
+        ReadCheckPoint();
 
-	// build (define) the following MultiFabs (that weren't read in from checkpoint):
-	// snew, unew, S_cc_new, rhcc_for_nodalproj, normal, pi
-	for (int lev=0; lev<=finest_level; ++lev) {
-	    snew              [lev].define(grids[lev], dmap[lev],          Nscal, ng_s);
-	    unew              [lev].define(grids[lev], dmap[lev], AMREX_SPACEDIM, ng_s);
-	    S_cc_new          [lev].define(grids[lev], dmap[lev],              1,    0);
-	    rhcc_for_nodalproj[lev].define(grids[lev], dmap[lev],              1,    1);
-	    if (spherical == 1) {
-		normal[lev].define(grids[lev], dmap[lev], 3, 1);
-		cell_cc_to_r[lev].define(grids[lev], dmap[lev], 1, 0);
-	    }
-	    pi[lev].define(convert(grids[lev],nodal_flag), dmap[lev], 1, 0); // nodal
-	}
+        // build (define) the following MultiFabs (that weren't read in from checkpoint):
+        // snew, unew, S_cc_new, rhcc_for_nodalproj, normal, pi
+        for (int lev=0; lev<=finest_level; ++lev) {
+            snew              [lev].define(grids[lev], dmap[lev],          Nscal, ng_s);
+            unew              [lev].define(grids[lev], dmap[lev], AMREX_SPACEDIM, ng_s);
+            S_cc_new          [lev].define(grids[lev], dmap[lev],              1,    0);
+            rhcc_for_nodalproj[lev].define(grids[lev], dmap[lev],              1,    1);
+            if (spherical == 1) {
+                normal[lev].define(grids[lev], dmap[lev], 3, 1);
+                cell_cc_to_r[lev].define(grids[lev], dmap[lev], 1, 0);
+            }
+            pi[lev].define(convert(grids[lev],nodal_flag), dmap[lev], 1, 0);             // nodal
 
-	// set finest_radial_level in fortran
-	// compute numdisjointchunks, r_start_coord, r_end_coord
-	init_multilevel(&finest_level);
-	compute_cutoff_coords(rho0_old.dataPtr());
+        }
+        compute_cutoff_coords(rho0_old.dataPtr());
     }
 
+    // set finest_radial_level in fortran
+    // compute numdisjointchunks, r_start_coord, r_end_coord
+    init_multilevel(tag_array.dataPtr(),&finest_level);
+
     if (spherical == 1) {
-	MakeNormal();
-	MakeCCtoRadii();
+        MakeNormal();
+        MakeCCtoRadii();
     }
 
     if (do_sponge) {
-	init_sponge(rho0_old.dataPtr());
+	if (use_exact_base_state) {
+	    init_sponge_irreg(rho0_old.dataPtr(),r_cc_loc.dataPtr(),r_edge_loc.dataPtr());
+	} else {
+	    init_sponge(rho0_old.dataPtr());
+	}
     }
 
     // make gravity
     make_grav_cell(grav_cell_old.dataPtr(),
-		   rho0_old.dataPtr(),
-		   r_cc_loc.dataPtr(),
-		   r_edge_loc.dataPtr());
-				
+                   rho0_old.dataPtr(),
+                   r_cc_loc.dataPtr(),
+                   r_edge_loc.dataPtr());
+
     if (restart_file == "") {
 
-	// compute gamma1bar
-	MakeGamma1bar(sold,gamma1bar_old,p0_old);
+        // compute gamma1bar
+        MakeGamma1bar(sold,gamma1bar_old,p0_old);
 
-	// compute beta0
-	if (use_exact_base_state) {
-	    make_beta0_irreg(beta0_old.dataPtr(),
-			     rho0_old.dataPtr(),
-			     p0_old.dataPtr(),
-			     gamma1bar_old.dataPtr(),
-			     grav_cell_old.dataPtr(),
-			     r_cc_loc.dataPtr(),
-			     r_edge_loc.dataPtr());
-	} else {
-	    make_beta0(beta0_old.dataPtr(),
-		       rho0_old.dataPtr(),
-		       p0_old.dataPtr(),
-		       gamma1bar_old.dataPtr(),
-		       grav_cell_old.dataPtr());
-	}
+        // compute beta0
+        if (use_exact_base_state) {
+            make_beta0_irreg(beta0_old.dataPtr(),
+                             rho0_old.dataPtr(),
+                             p0_old.dataPtr(),
+                             gamma1bar_old.dataPtr(),
+                             grav_cell_old.dataPtr(),
+                             r_cc_loc.dataPtr(),
+                             r_edge_loc.dataPtr());
+        } else {
+            make_beta0(beta0_old.dataPtr(),
+                       rho0_old.dataPtr(),
+                       p0_old.dataPtr(),
+                       gamma1bar_old.dataPtr(),
+                       grav_cell_old.dataPtr());
+        }
 
-	// initial projection
-	if (do_initial_projection) {
-	    Print() << "Doing initial projection" << std::endl;
-	    InitProj();
+        // initial projection
+        if (do_initial_projection) {
+            Print() << "Doing initial projection" << std::endl;
+            InitProj();
 
-	    if (plot_int > 0) {
-		Print() << "\nWriting plotfile plt_after_InitProj after InitProj" << std::endl;
-		WritePlotFile(9999998,t_old,rho0_old,p0_old,uold,sold);
-	    }
-	}
+            if (plot_int > 0) {
+                Print() << "\nWriting plotfile plt_after_InitProj after InitProj" << std::endl;
+                WritePlotFile(9999998,t_old,0,rho0_old,rhoh0_old,p0_old,gamma1bar_old,uold,sold,S_cc_old);
+            }
+        }
 
-	// compute initial time step
-	FirstDt();
+        // compute initial time step
+        FirstDt();
 
-	// divu iters - also update dt at end of each divu_iter
-	if (init_divu_iter > 0) {
-	    for (int i=1; i<=init_divu_iter; ++i) {
-		Print() << "Doing initial divu iteration #" << i << std::endl;
-		DivuIter(i);
-	    }
+        // divu iters - also update dt at end of each divu_iter
+        if (init_divu_iter > 0) {
+            for (int i=1; i<=init_divu_iter; ++i) {
+                Print() << "Doing initial divu iteration #" << i << std::endl;
+                DivuIter(i);
+            }
 
-	    if (plot_int > 0) {
-		Print() << "\nWriting plotfile plt_after_DivuIter after final DivuIter" << std::endl;
-		WritePlotFile(9999997,t_old,rho0_old,p0_old,uold,sold);
-	    }
-	}
+            if (plot_int > 0) {
+                Print() << "\nWriting plotfile plt_after_DivuIter after final DivuIter" << std::endl;
+                WritePlotFile(9999997,t_old,dt,rho0_old,rhoh0_old,p0_old,gamma1bar_old,uold,sold,S_cc_old);
+            }
+        }
 
-	if (stop_time >= 0. && t_old+dt > stop_time) {
-	    dt = std::min(dt,stop_time-t_old);
-	    Print() << "Stop time limits dt = " << dt << std::endl;
-	}
+        if (stop_time >= 0. && t_old+dt > stop_time) {
+            dt = std::min(dt,stop_time-t_old);
+            Print() << "Stop time limits dt = " << dt << std::endl;
+        }
 
-	dtold = dt;
-	t_new = t_old + dt;
+        dtold = dt;
+        t_new = t_old + dt;
 
-	// copy S_cc_old into S_cc_new for the pressure iterations
-	for (int lev=0; lev<=finest_level; ++lev) {
-	    MultiFab::Copy(S_cc_new[lev],S_cc_old[lev],0,0,1,0);
-	}
+        // copy S_cc_old into S_cc_new for the pressure iterations
+        for (int lev=0; lev<=finest_level; ++lev) {
+            MultiFab::Copy(S_cc_new[lev],S_cc_old[lev],0,0,1,0);
+        }
 
-	// initial (pressure) iters
-	for (int i=1; i<= init_iter; ++i) {
-	    Print() << "Doing initial pressure iteration #" << i << std::endl;
-	    InitIter();
-	}
+        // initial (pressure) iters
+        for (int i=1; i<= init_iter; ++i) {
+            Print() << "Doing initial pressure iteration #" << i << std::endl;
+            InitIter();
+        }
 
-	if (plot_int > 0) {
-	    Print() << "\nWriting plotfile 0 after all initialization" << std::endl;
-	    WritePlotFile(0,t_old,rho0_old,p0_old,uold,sold);
-	}
+        if (plot_int > 0) {
+            Print() << "\nWriting plotfile 0 after all initialization" << std::endl;
+            WritePlotFile(0,t_old,dt,rho0_old,rhoh0_old,p0_old,gamma1bar_old,uold,sold,S_cc_old);
+        }
 
-	if (chk_int > 0) {
-	    Print() << "\nWriting checkpoint 0 after all initialization" << std::endl;
-	    WriteCheckPoint(0);
+        if (chk_int > 0) {
+            Print() << "\nWriting checkpoint 0 after all initialization" << std::endl;
+            WriteCheckPoint(0);
 
-	    int index_dummy=0;
-	    Print() << "\nWriting diagnosis file after all initialization" << std::endl;
-	    DiagFile(0,t_old,rho0_old,p0_old,uold,sold,index_dummy);
-	}
+            int index_dummy=0;
+            Print() << "\nWriting diagnosis file after all initialization" << std::endl;
+            DiagFile(0,t_old,rho0_old,p0_old,uold,sold,index_dummy);
+        }
     }
 }
 
@@ -171,23 +180,27 @@ Maestro::InitData ()
 
     // read in model file and fill in s0_init and p0_init for all levels
     if (use_exact_base_state) {
-	init_base_state_irreg(s0_init.dataPtr(),p0_init.dataPtr(),rho0_old.dataPtr(),
-			      rhoh0_old.dataPtr(),p0_old.dataPtr(),tempbar.dataPtr(),
-			      tempbar_init.dataPtr(),
-			      r_cc_loc.dataPtr(), r_edge_loc.dataPtr());
+        init_base_state_irreg(s0_init.dataPtr(),p0_init.dataPtr(),rho0_old.dataPtr(),
+                              rhoh0_old.dataPtr(),p0_old.dataPtr(),tempbar.dataPtr(),
+                              tempbar_init.dataPtr(),
+                              r_cc_loc.dataPtr(), r_edge_loc.dataPtr());
+	std::fill(psi.begin(), psi.end(), 0.);
     } else {
-	init_base_state(s0_init.dataPtr(),p0_init.dataPtr(),rho0_old.dataPtr(),
-			rhoh0_old.dataPtr(),p0_old.dataPtr(),tempbar.dataPtr(),
-			tempbar_init.dataPtr());
+        init_base_state(s0_init.dataPtr(),p0_init.dataPtr(),rho0_old.dataPtr(),
+                        rhoh0_old.dataPtr(),p0_old.dataPtr(),tempbar.dataPtr(),
+                        tempbar_init.dataPtr());
     }
 
     // calls AmrCore::InitFromScratch(), which calls a MakeNewGrids() function
     // that repeatedly calls Maestro::MakeNewLevelFromScratch() to build and initialize
     InitFromScratch(t_old);
 
+    // reset tagging array to include buffer zones
+    TagArray();
+
     // set finest_radial_level in fortran
     // compute numdisjointchunks, r_start_coord, r_end_coord
-    init_multilevel(&finest_level);
+    init_multilevel(tag_array.dataPtr(),&finest_level);
 
     // average down data and fill ghost cells
     AverageDown(sold,0,Nscal);
@@ -197,72 +210,63 @@ Maestro::InitData ()
 
     // free memory in s0_init and p0_init by swapping it
     // with an empty vector that will go out of scope
-    Vector<Real> s0_swap;
-    RealVector p0_swap;
+    Vector<Real> s0_swap, p0_swap;
     std::swap(s0_swap,s0_init);
-    p0_swap.swap(p0_init);
+    std::swap(p0_swap,p0_init);
 
     if (fix_base_state) {
-	// compute cutoff coordinates
-	compute_cutoff_coords(rho0_old.dataPtr());
-	make_grav_cell(grav_cell_old.dataPtr(),
-		       rho0_old.dataPtr(),
-		       r_cc_loc.dataPtr(),
-		       r_edge_loc.dataPtr());
+        // compute cutoff coordinates
+        compute_cutoff_coords(rho0_old.dataPtr());
+        make_grav_cell(grav_cell_old.dataPtr(),
+                       rho0_old.dataPtr(),
+                       r_cc_loc.dataPtr(),
+                       r_edge_loc.dataPtr());
     }
     else {
+
+	// first compute cutoff coordinates using initial density profile
+	compute_cutoff_coords(rho0_old.dataPtr());
+
 	if (do_smallscale) {
-	    // first compute cutoff coordinates using initial density profile
-	    compute_cutoff_coords(rho0_old.dataPtr());
-	    // set rho0_old = rhoh0_old = 0.
-	    std::fill(rho0_old.begin(),  rho0_old.end(),  0.);
-	    std::fill(rhoh0_old.begin(), rhoh0_old.end(), 0.);
-	}
-	else {
-	    // set rho0 to be the average
-	    Average(sold,rho0_old,Rho);
-	    compute_cutoff_coords(rho0_old.dataPtr());
+            // set rho0_old = rhoh0_old = 0.
+            std::fill(rho0_old.begin(),  rho0_old.end(),  0.);
+            std::fill(rhoh0_old.begin(), rhoh0_old.end(), 0.);
+        }
+        else {
+            // set rho0 to be the average
+            Average(sold,rho0_old,Rho);
+            compute_cutoff_coords(rho0_old.dataPtr());
 
-	    // compute gravity
-	    make_grav_cell(grav_cell_old.dataPtr(),
-			   rho0_old.dataPtr(),
-			   r_cc_loc.dataPtr(),
-			   r_edge_loc.dataPtr());
+            // compute gravity
+            make_grav_cell(grav_cell_old.dataPtr(),
+                           rho0_old.dataPtr(),
+                           r_cc_loc.dataPtr(),
+                           r_edge_loc.dataPtr());
 
-	    // compute p0 with HSE
-	    enforce_HSE(rho0_old.dataPtr(),
-			p0_old.dataPtr(),
-			grav_cell_old.dataPtr(),
-			r_cc_loc.dataPtr(),
-			r_edge_loc.dataPtr());
+            // compute p0 with HSE
+            enforce_HSE(rho0_old.dataPtr(),
+                        p0_old.dataPtr(),
+                        grav_cell_old.dataPtr(),
+                        r_cc_loc.dataPtr(),
+                        r_edge_loc.dataPtr());
 
-	    // call eos with r,p as input to recompute T,h
-						
-#ifdef AMREX_USE_CUDA
-	    // turn on GPU for eos calls
-	    Device::beginDeviceLaunchRegion();
-#endif
-	    TfromRhoP(sold,p0_old,1);
-						
-#ifdef AMREX_USE_CUDA
-	    // turn off GPU after eos calls
-	    Device::endDeviceLaunchRegion();
-#endif
+            // call eos with r,p as input to recompute T,h
+            TfromRhoP(sold,p0_old,1);
 
-	    // set rhoh0 to be the average
-	    Average(sold,rhoh0_old,RhoH);
-	}
+            // set rhoh0 to be the average
+            Average(sold,rhoh0_old,RhoH);
+        }
 
-	// set tempbar to be the average
-	Average(sold,tempbar,Temp);
-	for (int i=0; i<tempbar.size(); ++i) {
-	    tempbar_init[i] = tempbar[i];
-	}
+        // set tempbar to be the average
+        Average(sold,tempbar,Temp);
+        for (int i=0; i<tempbar.size(); ++i) {
+            tempbar_init[i] = tempbar[i];
+        }
 
-	// set p0^{-1} = p0_old
-	for (int i=0; i<p0_old.size(); ++i) {
-	    p0_nm1[i] = p0_old[i];
-	}
+        // set p0^{-1} = p0_old
+        for (int i=0; i<p0_old.size(); ++i) {
+            p0_nm1[i] = p0_old[i];
+        }
     }
 }
 
@@ -288,7 +292,7 @@ void Maestro::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba,
     dSdt              [lev].define(ba, dm,              1,    0);
     rhcc_for_nodalproj[lev].define(ba, dm,              1,    1);
 
-    pi[lev].define(convert(ba,nodal_flag), dm, 1, 0); // nodal
+    pi[lev].define(convert(ba,nodal_flag), dm, 1, 0);     // nodal
 
     sold              [lev].setVal(0.);
     snew              [lev].setVal(0.);
@@ -302,8 +306,8 @@ void Maestro::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba,
     pi                [lev].setVal(0.);
 
     if (spherical == 1) {
-	normal      [lev].define(ba, dm, 3, 1);
-	cell_cc_to_r[lev].define(ba, dm, 1, 0);
+        normal      [lev].define(ba, dm, 3, 1);
+        cell_cc_to_r[lev].define(ba, dm, 1, 0);
     }
 
     const Real* dx = geom[lev].CellSize();
@@ -314,36 +318,39 @@ void Maestro::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba,
     MultiFab& cc_to_r = cell_cc_to_r[lev];
 
     // Loop over boxes (make sure mfi takes a cell-centered multifab as an argument)
-    for (MFIter mfi(scal); mfi.isValid(); ++mfi)
-	{
-	    const Box& box = mfi.validbox();
-	    const int* lo  = box.loVect();
-	    const int* hi  = box.hiVect();
+#ifdef _OPENMP
+#pragma omp parallel
+#endif
+    for (MFIter mfi(scal, true); mfi.isValid(); ++mfi)
+    {
+        const Box& tilebox = mfi.tilebox();
+        const int* lo  = tilebox.loVect();
+        const int* hi  = tilebox.hiVect();
 
-	    if (spherical == 0) {
-		initdata(&lev, &t_old, ARLIM_3D(lo), ARLIM_3D(hi),
-			 BL_TO_FORTRAN_FAB(scal[mfi]),
-			 BL_TO_FORTRAN_FAB(vel[mfi]),
-			 s0_init.dataPtr(), p0_init.dataPtr(),
-			 ZFILL(dx));
-	    } else {
-		init_base_state_map_sphr(BL_TO_FORTRAN_3D(cc_to_r[mfi]),
-					 ZFILL(dx_fine),
-					 ZFILL(dx));
+        if (spherical == 0) {
+            initdata(&lev, &t_old, ARLIM_3D(lo), ARLIM_3D(hi),
+                     BL_TO_FORTRAN_FAB(scal[mfi]),
+                     BL_TO_FORTRAN_FAB(vel[mfi]),
+                     s0_init.dataPtr(), p0_init.dataPtr(),
+                     ZFILL(dx));
+        } else {
+            init_base_state_map_sphr(BL_TO_FORTRAN_3D(cc_to_r[mfi]),
+                                     ZFILL(dx_fine),
+                                     ZFILL(dx));
 
-		initdata_sphr(&t_old, ARLIM_3D(lo), ARLIM_3D(hi),
-			      BL_TO_FORTRAN_FAB(scal[mfi]),
-			      BL_TO_FORTRAN_FAB(vel[mfi]),
-			      s0_init.dataPtr(), p0_init.dataPtr(),
-			      ZFILL(dx),
-			      r_cc_loc.dataPtr(), r_edge_loc.dataPtr(),
-			      BL_TO_FORTRAN_3D(cc_to_r[mfi]));
-	    }
-	}
+            initdata_sphr(&t_old, ARLIM_3D(lo), ARLIM_3D(hi),
+                          BL_TO_FORTRAN_FAB(scal[mfi]),
+                          BL_TO_FORTRAN_FAB(vel[mfi]),
+                          s0_init.dataPtr(), p0_init.dataPtr(),
+                          ZFILL(dx),
+                          r_cc_loc.dataPtr(), r_edge_loc.dataPtr(),
+                          BL_TO_FORTRAN_3D(cc_to_r[mfi]));
+        }
+    }
 
     if (lev > 0 && do_reflux) {
-	flux_reg_s[lev].reset(new FluxRegister(ba, dm, refRatio(lev-1), lev, Nscal));
-	flux_reg_u[lev].reset(new FluxRegister(ba, dm, refRatio(lev-1), lev, AMREX_SPACEDIM));
+        flux_reg_s[lev].reset(new FluxRegister(ba, dm, refRatio(lev-1), lev, Nscal));
+        flux_reg_u[lev].reset(new FluxRegister(ba, dm, refRatio(lev-1), lev, AMREX_SPACEDIM));
     }
 }
 
@@ -371,50 +378,51 @@ void Maestro::InitProj ()
     delta_gamma1_termbar.shrink_to_fit();
 
     for (int lev=0; lev<=finest_level; ++lev) {
-	rho_omegadot      [lev].define(grids[lev], dmap[lev], NumSpec, 0);
-	thermal           [lev].define(grids[lev], dmap[lev],       1, 0);
-	rho_Hnuc          [lev].define(grids[lev], dmap[lev],       1, 0);
-	rho_Hext          [lev].define(grids[lev], dmap[lev],       1, 0);
-	rhohalf           [lev].define(grids[lev], dmap[lev],       1, 1);
-	Tcoeff            [lev].define(grids[lev], dmap[lev],       1,    1);
-	hcoeff            [lev].define(grids[lev], dmap[lev],       1,    1);
-	Xkcoeff           [lev].define(grids[lev], dmap[lev], NumSpec,    1);
-	pcoeff            [lev].define(grids[lev], dmap[lev],       1,    1);
-	delta_gamma1      [lev].define(grids[lev], dmap[lev],       1,    1);
-	delta_gamma1_term [lev].define(grids[lev], dmap[lev],       1,    1);
+        rho_omegadot      [lev].define(grids[lev], dmap[lev], NumSpec, 0);
+        thermal           [lev].define(grids[lev], dmap[lev],       1, 0);
+        rho_Hnuc          [lev].define(grids[lev], dmap[lev],       1, 0);
+        rho_Hext          [lev].define(grids[lev], dmap[lev],       1, 0);
+        rhohalf           [lev].define(grids[lev], dmap[lev],       1, 1);
+        Tcoeff            [lev].define(grids[lev], dmap[lev],       1,    1);
+        hcoeff            [lev].define(grids[lev], dmap[lev],       1,    1);
+        Xkcoeff           [lev].define(grids[lev], dmap[lev], NumSpec,    1);
+        pcoeff            [lev].define(grids[lev], dmap[lev],       1,    1);
+        delta_gamma1      [lev].define(grids[lev], dmap[lev],       1,    1);
+        delta_gamma1_term [lev].define(grids[lev], dmap[lev],       1,    1);
 
-	// we don't have a legit timestep yet, so we set rho_omegadot,
-	// rho_Hnuc, and rho_Hext to 0
-	rho_omegadot[lev].setVal(0.);
-	rho_Hnuc[lev].setVal(0.);
-	rho_Hext[lev].setVal(0.);
-	delta_gamma1[lev].setVal(0.);
-	delta_gamma1_term[lev].setVal(0.);
+        // we don't have a legit timestep yet, so we set rho_omegadot,
+        // rho_Hnuc, and rho_Hext to 0
+        rho_omegadot[lev].setVal(0.);
+        rho_Hnuc[lev].setVal(0.);
+        rho_Hext[lev].setVal(0.);
+        delta_gamma1[lev].setVal(0.);
+        delta_gamma1_term[lev].setVal(0.);
 
-	// initial projection does not use density weighting
-	rhohalf[lev].setVal(1.);
+        // initial projection does not use density weighting
+        rhohalf[lev].setVal(1.);
     }
 
     // compute thermal diffusion
     if (use_thermal_diffusion) {
-	MakeThermalCoeffs(sold,Tcoeff,hcoeff,Xkcoeff,pcoeff);
+        MakeThermalCoeffs(sold,Tcoeff,hcoeff,Xkcoeff,pcoeff);
 
-	MakeExplicitThermal(thermal,sold,Tcoeff,hcoeff,Xkcoeff,pcoeff,p0_old,
-			    temp_diffusion_formulation);
+        MakeExplicitThermal(thermal,sold,Tcoeff,hcoeff,Xkcoeff,pcoeff,p0_old,
+                            temp_diffusion_formulation);
     }
     else {
-	for (int lev=0; lev<=finest_level; ++lev) {
-	    thermal[lev].setVal(0.);
-	}
+        for (int lev=0; lev<=finest_level; ++lev) {
+            thermal[lev].setVal(0.);
+        }
     }
 
     // compute S at cell-centers
     Make_S_cc(S_cc_old,delta_gamma1_term,delta_gamma1,sold,uold,rho_omegadot,rho_Hnuc,
-	      rho_Hext,thermal,p0_old,gamma1bar_old,delta_gamma1_termbar,psi);
+              rho_Hext,thermal,p0_old,gamma1bar_old,delta_gamma1_termbar,psi);
 
-    if (evolve_base_state && use_exact_base_state == 0) {
-	// average S into Sbar
-	Average(S_cc_old,Sbar,0);
+    // NOTE: not sure if valid for use_exact_base_state
+    if (evolve_base_state && (use_exact_base_state == 0 && average_base_state == 0)) {
+        // average S into Sbar
+        Average(S_cc_old,Sbar,0);
     }
 
     // make the nodal rhs for projection beta0*(S_cc-Sbar) + beta0*delta_chi
@@ -427,7 +435,6 @@ void Maestro::InitProj ()
 
 void Maestro::DivuIter (int istep_divu_iter)
 {
-
     // timer for profiling
     BL_PROFILE_VAR("Maestro::DivuIter()",DivuIter);
 
@@ -465,68 +472,65 @@ void Maestro::DivuIter (int istep_divu_iter)
     std::fill(delta_gamma1_termbar.begin(), delta_gamma1_termbar.end(), 0.);
 
     for (int lev=0; lev<=finest_level; ++lev) {
-	stemp             [lev].define(grids[lev], dmap[lev],   Nscal, 0);
-	rho_Hext          [lev].define(grids[lev], dmap[lev],       1, 0);
-	rho_omegadot      [lev].define(grids[lev], dmap[lev], NumSpec, 0);
-	rho_Hnuc          [lev].define(grids[lev], dmap[lev],       1, 0);
-	thermal           [lev].define(grids[lev], dmap[lev],       1, 0);
-	rhohalf           [lev].define(grids[lev], dmap[lev],       1, 1);
-	Tcoeff            [lev].define(grids[lev], dmap[lev],       1, 1);
-	hcoeff            [lev].define(grids[lev], dmap[lev],       1, 1);
-	Xkcoeff           [lev].define(grids[lev], dmap[lev], NumSpec, 1);
-	pcoeff            [lev].define(grids[lev], dmap[lev],       1, 1);
-	delta_gamma1      [lev].define(grids[lev], dmap[lev],       1, 1);
-	delta_gamma1_term [lev].define(grids[lev], dmap[lev],       1, 1);
+        stemp             [lev].define(grids[lev], dmap[lev],   Nscal, 0);
+        rho_Hext          [lev].define(grids[lev], dmap[lev],       1, 0);
+        rho_omegadot      [lev].define(grids[lev], dmap[lev], NumSpec, 0);
+        rho_Hnuc          [lev].define(grids[lev], dmap[lev],       1, 0);
+        thermal           [lev].define(grids[lev], dmap[lev],       1, 0);
+        rhohalf           [lev].define(grids[lev], dmap[lev],       1, 1);
+        Tcoeff            [lev].define(grids[lev], dmap[lev],       1, 1);
+        hcoeff            [lev].define(grids[lev], dmap[lev],       1, 1);
+        Xkcoeff           [lev].define(grids[lev], dmap[lev], NumSpec, 1);
+        pcoeff            [lev].define(grids[lev], dmap[lev],       1, 1);
+        delta_gamma1      [lev].define(grids[lev], dmap[lev],       1, 1);
+        delta_gamma1_term [lev].define(grids[lev], dmap[lev],       1, 1);
 
-	// divu_iters do not use density weighting
-	rhohalf[lev].setVal(1.);
+        // divu_iters do not use density weighting
+        rhohalf[lev].setVal(1.);
     }
 
-#ifdef REACTIONS
     React(sold,stemp,rho_Hext,rho_omegadot,rho_Hnuc,p0_old,0.5*dt);
-#else
-    for (int lev=0; lev<=finest_level; ++lev) {
-	MultiFab::Copy(stemp[lev],sold[lev],0,0,Nscal,0);
 
-	rho_Hext[lev].setVal(0.);
-	rho_omegadot[lev].setVal(0.);
-	rho_Hnuc[lev].setVal(0.);
-    }
-#endif
-		
     if (use_thermal_diffusion) {
-	MakeThermalCoeffs(sold,Tcoeff,hcoeff,Xkcoeff,pcoeff);
+        MakeThermalCoeffs(sold,Tcoeff,hcoeff,Xkcoeff,pcoeff);
 
-	MakeExplicitThermal(thermal,sold,Tcoeff,hcoeff,Xkcoeff,pcoeff,p0_old,
-			    temp_diffusion_formulation);
+        MakeExplicitThermal(thermal,sold,Tcoeff,hcoeff,Xkcoeff,pcoeff,p0_old,
+                            temp_diffusion_formulation);
     }
     else {
-	for (int lev=0; lev<=finest_level; ++lev) {
-	    thermal[lev].setVal(0.);
-	}
+        for (int lev=0; lev<=finest_level; ++lev) {
+            thermal[lev].setVal(0.);
+        }
     }
 
     // compute S at cell-centers
     Make_S_cc(S_cc_old,delta_gamma1_term,delta_gamma1,sold,uold,rho_omegadot,rho_Hnuc,
-	      rho_Hext,thermal,p0_old,gamma1bar_old,delta_gamma1_termbar,psi);
+              rho_Hext,thermal,p0_old,gamma1bar_old,delta_gamma1_termbar,psi);
 
-    if (evolve_base_state && use_exact_base_state == 0) {
-	Average(S_cc_old,Sbar,0);
-
-	// compute Sbar = Sbar + delta_gamma1_termbar
-	if (use_delta_gamma1_term) {
+    // NOTE: not sure if valid for use_exact_base_state
+    if (evolve_base_state) {
+	if ((use_exact_base_state || average_base_state) && use_delta_gamma1_term) {
 	    for(int i=0; i<Sbar.size(); ++i) {
 		Sbar[i] += delta_gamma1_termbar[i];
 	    }
-	}
+	} else {
+	    Average(S_cc_old,Sbar,0);
 
-	int is_predictor = 1;
-	make_w0(w0.dataPtr(), w0.dataPtr(), w0_force.dataPtr(),Sbar.dataPtr(),
-		rho0_old.dataPtr(), rho0_old.dataPtr(), p0_old.dataPtr(),
-		p0_old.dataPtr(), gamma1bar_old.dataPtr(), gamma1bar_old.dataPtr(),
-		p0_minus_peosbar.dataPtr(), psi.dataPtr(), etarho_ec.dataPtr(),
-		etarho_cc.dataPtr(), delta_chi_w0.dataPtr(), r_cc_loc.dataPtr(),
-		r_edge_loc.dataPtr(), &dt, &dt, &is_predictor);
+	    // compute Sbar = Sbar + delta_gamma1_termbar
+	    if (use_delta_gamma1_term) {
+		for(int i=0; i<Sbar.size(); ++i) {
+		    Sbar[i] += delta_gamma1_termbar[i];
+		}
+	    }
+
+	    int is_predictor = 1;
+	    make_w0(w0.dataPtr(), w0.dataPtr(), w0_force.dataPtr(),Sbar.dataPtr(),
+		    rho0_old.dataPtr(), rho0_old.dataPtr(), p0_old.dataPtr(),
+		    p0_old.dataPtr(), gamma1bar_old.dataPtr(), gamma1bar_old.dataPtr(),
+		    p0_minus_peosbar.dataPtr(), psi.dataPtr(), etarho_ec.dataPtr(),
+		    etarho_cc.dataPtr(), delta_chi_w0.dataPtr(), r_cc_loc.dataPtr(),
+		    r_edge_loc.dataPtr(), &dt, &dt, &is_predictor);
+	}
     }
 
     // make the nodal rhs for projection beta0*(S_cc-Sbar) + beta0*delta_chi
@@ -541,29 +545,29 @@ void Maestro::DivuIter (int istep_divu_iter)
     EstDt();
 
     if (maestro_verbose > 0) {
-	Print() << "Call to estdt at end of istep_divu_iter = " << istep_divu_iter
-		<< " gives dt = " << dt << std::endl;
+        Print() << "Call to estdt at end of istep_divu_iter = " << istep_divu_iter
+                << " gives dt = " << dt << std::endl;
     }
 
     dt *= init_shrink;
     if (maestro_verbose > 0) {
-	Print() << "Multiplying dt by init_shrink; dt = " << dt << std::endl;
+        Print() << "Multiplying dt by init_shrink; dt = " << dt << std::endl;
     }
 
     if (dt > dt_hold) {
-	if (maestro_verbose > 0) {
-	    Print() << "Ignoring this new dt since it's larger than the previous dt = "
-		    << dt_hold << std::endl;
-	}
-	dt = std::min(dt_hold,dt);
+        if (maestro_verbose > 0) {
+            Print() << "Ignoring this new dt since it's larger than the previous dt = "
+                    << dt_hold << std::endl;
+        }
+        dt = std::min(dt_hold,dt);
     }
 
     if (fixed_dt != -1.0) {
-	// fixed dt
-	dt = fixed_dt;
-	if (maestro_verbose > 0) {
-	    Print() << "Setting fixed dt = " << dt << std::endl;
-	}
+        // fixed dt
+        dt = fixed_dt;
+        if (maestro_verbose > 0) {
+            Print() << "Setting fixed dt = " << dt << std::endl;
+        }
     }
 }
 
@@ -574,13 +578,15 @@ void Maestro::InitIter ()
 
     // advance the solution by dt
     if (use_exact_base_state) {
-	AdvanceTimeStepIrreg(true);
+        AdvanceTimeStepIrreg(true);
+    } else if (average_base_state) {
+	AdvanceTimeStepAverage(true);
     } else {
-	AdvanceTimeStep(true);
+        AdvanceTimeStep(true);
     }
 
     // copy pi from snew to sold
     for (int lev=0; lev<=finest_level; ++lev) {
-	MultiFab::Copy(sold[lev],snew[lev],Pi,Pi,1,ng_s);
+        MultiFab::Copy(sold[lev],snew[lev],Pi,Pi,1,ng_s);
     }
 }

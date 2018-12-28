@@ -1,7 +1,6 @@
 
 # INITIAL MODEL
 maestro.model_file = "model.hse.cool.coulomb"
-maestro.probin_file = "probin"
 maestro.perturb_model = true
 
 maestro.ppm_type = 0
@@ -25,7 +24,7 @@ maestro.v              = 1       # verbosity
 amrex.fpe_trap_invalid = 1       # floating point exception
 
 # GRIDDING AND REFINEMENT
-amr.n_cell             = 384 640
+amr.n_cell             = 192 320
 amr.max_grid_size      = 64
 amr.max_level          = 0       # maximum level number allowed
 maestro.regrid_int     = 2       # how often to regrid
@@ -38,7 +37,7 @@ maestro.temperr = 6.5e8 6.5e8
 
 # TIME STEPPING
 maestro.max_step  = 1000
-maestro.stop_time = 2.5
+maestro.stop_time = 1
 maestro.cfl       = 0.9    # cfl number for hyperbolic system
                            # In this test problem, the velocity is
 		           # time-dependent.  We could use 0.9 in
@@ -60,9 +59,9 @@ maestro.sponge_kappa = 10.e0
 maestro.use_thermal_diffusion = false
 
 # PLOTFILES
-maestro.plot_base_name  = plt    # root name of plot file
-maestro.plot_int   = 10      # number of timesteps between plot files
-maestro.plot_deltat = 0.5e0
+maestro.plot_base_name  = serial    # root name of plot file
+maestro.plot_int   = 1000      # number of timesteps between plot files
+maestro.plot_deltat = 1e0
 
 # CHECKPOINT
 maestro.check_base_name = chk
@@ -86,3 +85,32 @@ maestro.eps_hg             = 1.e-12
 maestro.eps_hg_max         = 1.e-10
 maestro.hg_level_factor    = 10.
 maestro.eps_hg_bottom      = 1.e-4
+
+# BURNING parameters
+maestro.do_burning = true
+
+# OMP settings
+system.regtest_reduction = 1
+
+&probin
+
+  ! override the default values of the probin namelist values here
+  pert_temp_factor = 1.d0
+  pert_rad_factor = 1.d0
+  do_small_domain = F
+
+  !extern
+
+  ! Note that some of the parameters in this
+  ! namelist are specific to the default EOS,
+  ! network, and/or integrator used in the
+  ! makefile. If you try a different set of
+  ! microphysics routines be sure to check that
+  ! the parameters in here are consistent, as
+  ! Fortran does not like seeing unknown variables
+  ! in the namelist.
+
+  use_eos_coulomb = T
+
+/
+

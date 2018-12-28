@@ -3,7 +3,7 @@
 ! or add runtime parameters, please edit _cpp_parameters and then run
 ! mk_params.sh
 
-! This module stores the runtime parameters and integer names for 
+! This module stores the runtime parameters and integer names for
 ! indexing arrays.
 !
 ! The Fortran-specific parameters are initialized in set_method_params(),
@@ -86,7 +86,7 @@ module meth_params_module
 
 #ifdef AMREX_USE_CUDA
   attributes(managed) :: maestro_verbose
-  
+
   attributes(managed) :: perturb_model
   attributes(managed) :: print_init_hse_diag
   attributes(managed) :: cfl
@@ -125,7 +125,7 @@ module meth_params_module
   attributes(managed) :: temp_diffusion_formulation
   attributes(managed) :: thermal_diffusion_type
   attributes(managed) :: limit_conductivity
-  
+
   attributes(managed) :: burner_threshold_cutoff
   attributes(managed) :: reaction_sum_tol
   attributes(managed) :: small_temp
@@ -221,6 +221,7 @@ contains
     allocate(ppm_type)
     ppm_type = 1;
     allocate(beta0_type)
+    ppm_trace_forces = 0;
     beta0_type = 1;
     allocate(use_linear_grav_in_beta0)
     use_linear_grav_in_beta0 = .false.;
@@ -295,6 +296,7 @@ contains
     call pp%query("slope_order", slope_order)
     call pp%query("grav_const", grav_const)
     call pp%query("ppm_type", ppm_type)
+    call pp%query("ppm_trace_forces", ppm_trace_forces)
     call pp%query("beta0_type", beta0_type)
     call pp%query("use_linear_grav_in_beta0", use_linear_grav_in_beta0)
     call pp%query("rotational_frequency", rotational_frequency)
@@ -334,7 +336,7 @@ contains
     end if
 
 
-    
+
   end subroutine finalize_meth_params
 
 end module meth_params_module

@@ -1,18 +1,19 @@
 ! a module for storing the geometric information so we don't have to pass it
 !
 ! This module provides the coordinate value for the left edge of a base-state
-! zone (r_edge_loc) and the zone center (r_cc_loc).  As always, it is assumed that 
+! zone (r_edge_loc) and the zone center (r_cc_loc).  As always, it is assumed that
 ! the base state arrays begin with index 0, not 1.
 
 module base_state_geometry_module
 
   use amrex_error_module
+  use amrex_mempool_module, only : bl_allocate, bl_deallocate
   use amrex_constants_module
   use parallel, only: parallel_IOProcessor
   use amrex_fort_module, only: amrex_spacedim
   use meth_params_module, only: spherical, octant, anelastic_cutoff, base_cutoff_density, &
-                                burning_cutoff_density, prob_lo, prob_hi, &
-                                use_exact_base_state
+       burning_cutoff_density, prob_lo, prob_hi, &
+       use_exact_base_state
 
   implicit none
 
@@ -34,16 +35,16 @@ module base_state_geometry_module
   integer         , save, public  :: nr_irreg
   double precision, save, public  :: center(3)
 
-  double precision, allocatable, save, public  :: dr(:)
-  integer         , allocatable, save, public  :: nr(:)
+  double precision, pointer, save, public  :: dr(:)
+  integer         , pointer, save, public  :: nr(:)
 
-  integer         , allocatable, save, public  :: numdisjointchunks(:)
-  integer         , allocatable, save, public  :: r_start_coord(:,:)
-  integer         , allocatable, save, public  :: r_end_coord(:,:)
+  integer         , pointer, save, public  :: numdisjointchunks(:)
+  integer         , pointer, save, public  :: r_start_coord(:,:)
+  integer         , pointer, save, public  :: r_end_coord(:,:)
 
-  integer         , allocatable, save, public  :: anelastic_cutoff_coord(:)
-  integer         , allocatable, save, public  :: base_cutoff_density_coord(:)
-  integer         , allocatable, save, public  :: burning_cutoff_density_coord(:)
+  integer         , pointer, save, public  :: anelastic_cutoff_coord(:)
+  integer         , pointer, save, public  :: base_cutoff_density_coord(:)
+  integer         , pointer, save, public  :: burning_cutoff_density_coord(:)
 
 #ifdef AMREX_USE_CUDA
   attributes(managed) :: max_radial_level
@@ -53,10 +54,10 @@ module base_state_geometry_module
 contains
 
   subroutine init_base_state_geometry(max_radial_level_in,nr_fine_in,dr_fine_in, &
-                                      r_cc_loc,r_edge_loc, &
-                                      dx_fine, &
-                                      nr_irreg_in) &
-                                      bind(C, name="init_base_state_geometry")
+       r_cc_loc,r_edge_loc, &
+       dx_fine, &
+       nr_irreg_in) &
+       bind(C, name="init_base_state_geometry")
 
     integer          , intent(in   ) :: max_radial_level_in
     integer          , intent(in   ) :: nr_fine_in
@@ -81,23 +82,23 @@ contains
     dr_fine = dr_fine_in
     nr_irreg = nr_irreg_in
 
-    ! FIXME - we want to set this after regridding 
+    ! FIXME - we want to set this after regridding
     finest_radial_level = max_radial_level
 
     ! compute center(:)
     if (octant) then
        if (.not. (spherical == 1 .and. amrex_spacedim == 3 .and. &
-                  all(prob_lo(1:amrex_spacedim) == 0.d0) ) ) then
+            all(prob_lo(1:amrex_spacedim) == 0.d0) ) ) then
           call amrex_error("ERROR: octant requires spherical with prob_lo = 0.0")
        endif
        center = 0.d0
     else
        center = 0.5d0*(prob_lo + prob_hi)
     endif
-       
+
     ! allocate space for dr, nr
-    allocate(dr(0:max_radial_level))
-    allocate(nr(0:max_radial_level))
+    call bl_allocate(dr,0,max_radial_level)
+    call bl_allocate(nr,0,max_radial_level)
 
     ! compute nr(:) and dr(:)
     nr(max_radial_level) = nr_fine
@@ -112,7 +113,7 @@ contains
           nr(n) = nr(n+1)/2
           dr(n) = dr(n+1)*2.d0
        enddo
-       
+
        ! compute r_cc_loc, r_edge_loc
        do n = 0,max_radial_level
           do i = 0,nr(n)-1
@@ -129,7 +130,7 @@ contains
        ! compute r_cc_loc, r_edge_loc
        if (use_exact_base_state) then
           ! nr_fine = nr_irreg + 1
-          do i=0,nr_fine-1 
+          do i=0,nr_fine-1
              r_cc_loc(0,i) = sqrt(0.75d0+2.d0*i)*dx_fine(0)
           end do
           r_edge_loc(0,0) = 0.d0
@@ -147,15 +148,15 @@ contains
 
     end if
 
-    allocate(      anelastic_cutoff_coord(0:max_radial_level))
-    allocate(   base_cutoff_density_coord(0:max_radial_level))
-    allocate(burning_cutoff_density_coord(0:max_radial_level))
+    call bl_allocate(      anelastic_cutoff_coord,0,max_radial_level)
+    call bl_allocate(   base_cutoff_density_coord,0,max_radial_level)
+    call bl_allocate(burning_cutoff_density_coord,0,max_radial_level)
 
   end subroutine init_base_state_geometry
 
   subroutine init_base_state_map_sphr(cc_to_r, lo, hi, &
-                                      dx_fine, dx_lev) &
-                                      bind(C, name="init_base_state_map_sphr")
+       dx_fine, dx_lev) &
+       bind(C, name="init_base_state_map_sphr")
 
     integer          , intent(in   ) :: lo(3), hi(3)
     double precision , intent(inout) :: cc_to_r(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
@@ -171,7 +172,7 @@ contains
        call abort()
     end if
 
-    ! map cell centers to base state indices  
+    ! map cell centers to base state indices
     if (use_exact_base_state) then
 
        do k = lo(3),hi(3)
@@ -180,26 +181,26 @@ contains
              y = prob_lo(2) + (dble(j)+0.5d0)*dx_lev(2) - center(2)
              do i = lo(1),hi(1)
                 x = prob_lo(1) + (dble(i)+0.5d0)*dx_lev(1) - center(1)
-                
+
                 index = (x**2 + y**2 + z**2)/(2.0d0*dx_fine(0)**2) - 0.375d0
                 cc_to_r(i,j,k) = nint(index)
              end do
           end do
        end do
-       
+
     end if
 
   end subroutine init_base_state_map_sphr
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-   subroutine compute_cutoff_coords(rho0) bind(C, name="compute_cutoff_coords") 
+  subroutine compute_cutoff_coords(rho0) bind(C, name="compute_cutoff_coords")
 
-     double precision, intent(in   ) :: rho0(0:max_radial_level,0:nr_fine-1)
+    double precision, intent(in   ) :: rho0(0:max_radial_level,0:nr_fine-1)
 
-     ! local
-     integer :: i,n,r,which_lev
-     logical :: found
+    ! local
+    integer :: i,n,r,which_lev
+    logical :: found
 
     ! compute the coordinates of the anelastic cutoff
     found = .false.
@@ -320,7 +321,7 @@ contains
        burning_cutoff_density_coord(finest_radial_level) = nr(finest_radial_level)
     endif
 
-    ! set the burning cutoff coordinate on the finer levels 
+    ! set the burning cutoff coordinate on the finer levels
     do n=which_lev+1,finest_radial_level
        burning_cutoff_density_coord(n) = 2*burning_cutoff_density_coord(n-1)+1
     end do
@@ -339,18 +340,17 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine init_multilevel(finest_radial_level_in) bind(C, name="init_multilevel")
-    
+  subroutine init_multilevel(tag_array, finest_radial_level_in) bind(C, name="init_multilevel")
+
     ! compute numdisjointchunks, r_start_coord, r_end_coord
     ! FIXME - right now there is one chunk at each level that spans the domain
-    
+
+    integer, intent(in   ) :: tag_array(0:max_radial_level,0:nr_fine-1)
     integer, intent(in   ) :: finest_radial_level_in
 
-    integer :: n
-
-    if (finest_radial_level_in .gt. 0 .and. spherical .eq. 0) then
-       call amrex_abort("base_state_geomtry: init_multilevel not written yet for planar")
-    end if
+    integer :: n, r
+    integer :: nchunks, maxchunks
+    logical :: chunk_start
 
     if (spherical .eq. 1) then
        finest_radial_level = 0
@@ -358,38 +358,86 @@ contains
        finest_radial_level = finest_radial_level_in
     end if
 
-    if (allocated(numdisjointchunks)) then
-       deallocate(numdisjointchunks)
+    if (associated(numdisjointchunks)) then
+       call bl_deallocate(numdisjointchunks)
     end if
-    allocate(numdisjointchunks(0:finest_radial_level))
+    call bl_allocate(numdisjointchunks,0,finest_radial_level)
 
-    if (allocated(r_start_coord)) then
-       deallocate(r_start_coord)
-    end if
-    allocate(r_start_coord(0:finest_radial_level,1)) ! FIXME - for > 1 chunk case
+    ! loop through tag_array first to determine the maximum number of chunks
+    ! to use for allocating r_start_coord and r_end_coord
+    maxchunks = 1
+    do n=1,finest_radial_level
+       
+       ! initialize variables
+       chunk_start = .false.
+       nchunks = 0
 
-    if (allocated(r_end_coord)) then
-       deallocate(r_end_coord)
+       ! increment nchunks at beginning of each chunk
+       ! (ex. when the tagging index changes from 0 to 1)
+       do r=0,nr(n-1)-1
+          if (tag_array(n-1,r).gt.0 .AND. .not.chunk_start) then
+             chunk_start = .true.
+             nchunks = nchunks + 1
+          elseif (tag_array(n-1,r).eq.0 .AND. chunk_start) then
+             chunk_start = .false.
+          end if
+       end do
+
+       maxchunks = max(nchunks,maxchunks)
+
+    end do
+    
+    if (associated(r_start_coord)) then
+       call bl_deallocate(r_start_coord)
     end if
-    allocate(r_end_coord(0:finest_radial_level,1)) ! FIXME - for > 1 chunk case
+    call bl_allocate(r_start_coord,0,finest_radial_level,1,maxchunks) 
+
+    if (associated(r_end_coord)) then
+       call bl_deallocate(r_end_coord)
+    end if
+    call bl_allocate(r_end_coord,0,finest_radial_level,1,maxchunks) 
 
     if (spherical .eq. 0) then
 
-       ! FIXME - needs lots of work
-       do n=0,finest_radial_level
-          numdisjointchunks(n) = 1
-          r_start_coord(n,1) = 0
-          r_end_coord(n,1) = nr(n)-1
-       end do
-
-    else
-       
+       ! coarsest grid always has 1 chunk of data
        numdisjointchunks(0) = 1
        r_start_coord(0,1) = 0
        r_end_coord(0,1) = nr(0)-1
+
+       ! for > 1 chunks (multilevel)
+       do n=1,finest_radial_level
+          ! initialize variables
+          chunk_start = .false.
+          numdisjointchunks(n) = 0
+
+          ! increment numdisjointchunks at beginning of each chunk
+          ! (ex. when the tagging index changes from 0 to 1)
+          do r=0,nr(n-1)-1
+             if (tag_array(n-1,r).gt.0 .AND. .not.chunk_start) then
+                chunk_start = .true.
+                numdisjointchunks(n) = numdisjointchunks(n) + 1
+                r_start_coord(n,numdisjointchunks(n)) = 2*r
+             elseif (tag_array(n-1,r).eq.0 .AND. chunk_start) then
+                r_end_coord(n,numdisjointchunks(n)) = 2*r-1
+                chunk_start = .false.
+             elseif (r.eq.nr(n-1)-1 .AND. chunk_start) then
+                ! if last chunk is at the end of array
+                r_end_coord(n,numdisjointchunks(n)) = nr(n)-1
+             end if
+          end do
+       end do
        
+    else
+
+       numdisjointchunks(0) = 1
+       r_start_coord(0,1) = 0
+       r_end_coord(0,1) = nr(0)-1
+
     end if
 
+!!$    print *,"hack,",numdisjointchunks
+!!$    print *,"hack,",r_start_coord(1,:),r_end_coord(1,:)
+    
   end subroutine init_multilevel
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -441,7 +489,7 @@ contains
 
     if (is_cell_centered .eq. 1) then
 
-       ! compute limited slopes at the coarse level and set 4 fine ghost cells 
+       ! compute limited slopes at the coarse level and set 4 fine ghost cells
        ! maintaining conservation
        do n=finest_radial_level,1,-1
           do i=1,numdisjointchunks(n)
@@ -468,7 +516,7 @@ contains
                 s0(n,r_start_coord(n,i)-3) = s0(n-1,r_crse) + FOURTH*slope
                 s0(n,r_start_coord(n,i)-4) = s0(n-1,r_crse) - FOURTH*slope
              end if
-             
+
              ! hi side
              if (r_end_coord(n,i) .ne. nr(n)-1) then
                 r_crse = (r_end_coord(n,i)+1)/2
@@ -505,9 +553,9 @@ contains
                 s0(n,r_start_coord(n,i)-1) = -THIRD*s0(n,r_start_coord(n,i)+1) &
                      + s0(n,r_start_coord(n,i)) + THIRD*s0(n-1,r_start_coord(n,i)/2-1)
                 ! copy the next ghost cell value directly in from the coarser level
-                s0(n,r_start_coord(n,i)-2) = s0(n-1,(r_start_coord(n,i)-2)/2) 
+                s0(n,r_start_coord(n,i)-2) = s0(n-1,(r_start_coord(n,i)-2)/2)
              end if
-             
+
              if (r_end_coord(n,i)+1 .ne. nr(n)) then
                 ! quadratic interpolation from the three closest points
                 s0(n,r_end_coord(n,i)+2) = -THIRD*s0(n,r_end_coord(n,i)) &
@@ -527,11 +575,14 @@ contains
 
   subroutine destroy_base_state_geometry() bind(C, name="destroy_base_state_geometry")
 
-      deallocate(dr, nr)
-      deallocate(anelastic_cutoff_coord)
-      deallocate(base_cutoff_density_coord)
-      deallocate(burning_cutoff_density_coord)
-      deallocate(numdisjointchunks,r_start_coord,r_end_coord)
+    call bl_deallocate(dr)
+    call bl_deallocate(nr)
+    call bl_deallocate(anelastic_cutoff_coord)
+    call bl_deallocate(base_cutoff_density_coord)
+    call bl_deallocate(burning_cutoff_density_coord)
+    call bl_deallocate(numdisjointchunks)
+    call bl_deallocate(r_start_coord)
+    call bl_deallocate(r_end_coord)
 
   end subroutine destroy_base_state_geometry
 
